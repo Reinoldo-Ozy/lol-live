@@ -256,6 +256,15 @@ class Client(discord.Client):
         q = self.reg.get(str(gid), {}).get("queues") or []
         return not q or game.get("gameQueueConfigId") in q
 
+    def wr_text(self, entry):
+        if not entry:
+            return ""
+        w = int(entry.get("wins", 0))
+        l = int(entry.get("losses", 0))
+        if w + l == 0:
+            return ""
+        return f" · {100 * w / (w + l):.1f}% WR".replace(".", ",")
+
     def rank_score(self, entry):
         if not entry:
             return -1
@@ -281,7 +290,8 @@ class Client(discord.Client):
                 me = next((x for x in g["participants"]
                            if x.get("puuid") == p["puuid"]), None)
                 extra = f" 🔴 {champion_name(me['championId']) if me else 'em partida'}"
-            linhas.append(f"`{i:02d}` **{p['riot']}** · {render.rank_text(entry)}{extra}")
+            linhas.append(f"`{i:02d}` **{p['riot']}** · {render.rank_text(entry)}"
+                          f"{self.wr_text(entry)}{extra}")
         emb = discord.Embed(
             timestamp=discord.utils.utcnow(),
             title="Jogadores vigiados",
