@@ -144,6 +144,7 @@ class Client(discord.Client):
         self.games = {}
         self.names = {}
         self.ranks = {}
+        self.roles = {}
         self.panels = {}
         self.notices = {}
         self.teams = {}
@@ -486,6 +487,35 @@ class Client(discord.Client):
         self.ranks[puuid] = (solo, time.monotonic())
         return solo
 
+    def role_of(self, puuid, platform="br1"):
+        hit = self.roles.get(puuid)
+        if hit and time.monotonic() - hit[1] < 6 * 3600:
+            return hit[0]
+        regional = PLATFORMS.get(platform, "americas")
+        role = ""
+        votos = {}
+        try:
+            ids = riot_get(f"https://{regional}.api.riotgames.com/lol/match/v5/"
+                           f"matches/by-puuid/{puuid}/ids?count=5&queue=420") or []
+            for mid in ids:
+                m = riot_get(f"https://{regional}.api.riotgames.com/lol/match/v5/"
+                             f"matches/{mid}")
+                if not m:
+                    continue
+                me = next((x for x in m["info"]["participants"]
+                           if x["puuid"] == puuid), None)
+                pos = (me or {}).get("teamPosition") or ""
+                if pos:
+                    votos[pos] = votos.get(pos, 0) + 1
+                if sum(votos.values()) >= 3:
+                    break
+            if votos:
+                role = max(votos, key=votos.get)
+        except Exception as e:
+            print("role:", e)
+        self.roles[puuid] = (role, time.monotonic())
+        return role
+
     async def enrich(self, game, platform, focus=None):
         focus = set(focus or ())
         out = []
@@ -495,11 +525,15 @@ class Client(discord.Client):
             if not riot:
                 riot = await asyncio.to_thread(account_name, pu, platform)
                 self.names[pu] = riot
+            else:
+                self.names[pu] = riot
             entry = await asyncio.to_thread(self.rank_of, pu, platform)
+            role = await asyncio.to_thread(self.role_of, pu, platform)
+            if not role and 11 in (p.get("spell1Id"), p.get("spell2Id")):
+                role = "JUNGLE"
             out.append({"teamId": p["teamId"], "championId": p["championId"],
                         "player": riot, "champ": champion_name(p["championId"]),
-                        "role": p.get("teamPosition") or "",
-                        "watched": pu in focus,
+                        "role": role, "watched": pu in focus,
                         "elo": render.rank_text(entry)})
         return out
 

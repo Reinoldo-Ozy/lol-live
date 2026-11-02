@@ -80,6 +80,9 @@ journalctl --user -u lol-live -f
   formato no seu cliente — se o seu não abrir, me avise que ajusto.
 - O jogador precisa ter **espectador habilitado** (padrão em ranqueada).
 - Partida custom/treino e alguns modos não aparecem no spectator.
+- O `spectator-v5` não informa a posição dos jogadores: o bot infere pela posição
+  mais comum nas últimas 3 ranqueadas de cada um (cache de 6 h) e usa Smite como
+  fallback para jungla.
 - O estado fica em memória: reiniciar o bot no meio de uma partida gera um
   aviso repetido.
 - A chave da Riot aqui é uma **Personal API Key** (não expira). Se um dia voltar
