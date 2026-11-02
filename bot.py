@@ -9,6 +9,7 @@ from collections import deque
 from pathlib import Path
 
 import datetime
+import itertools
 
 import discord
 import requests
@@ -145,6 +146,7 @@ class Client(discord.Client):
         self.names = {}
         self.ranks = {}
         self.roles = {}
+        self.history = self.load_history()
         self.panels = {}
         self.notices = {}
         self.teams = {}
@@ -257,6 +259,91 @@ class Client(discord.Client):
         q = self.reg.get(str(gid), {}).get("queues") or []
         return not q or game.get("gameQueueConfigId") in q
 
+    HIST = ROOT / "data" / "history.json"
+
+    def load_history(self):
+        try:
+            h = json.loads(self.HIST.read_text())
+        except Exception:
+            h = []
+        now = time.time()
+        h = [x for x in h if now - x.get("ended", 0) < 86400]
+        return h
+
+    def save_history(self):
+        now = time.time()
+        self.history = [x for x in self.history if now - x.get("ended", 0) < 86400]
+        self.history = self.history[-40:]
+        try:
+            self.HIST.write_text(json.dumps(self.history))
+        except Exception as e:
+            print("history:", e)
+
+    def role_scores(self, hist_role, tags, spells):
+        sc = {r: 0.0 for r in ("TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY")}
+        if hist_role in sc:
+            sc[hist_role] += 2.0
+        t = set(tags)
+        if "Marksman" in t:
+            sc["BOTTOM"] += 2.0
+        if "Support" in t:
+            sc["UTILITY"] += 2.0
+        if "Mage" in t:
+            sc["MIDDLE"] += 1.5
+        if "Assassin" in t:
+            sc["MIDDLE"] += 1.0
+            sc["JUNGLE"] += 0.5
+        if "Tank" in t:
+            sc["TOP"] += 1.0
+            sc["UTILITY"] += 0.5
+        if "Fighter" in t:
+            sc["TOP"] += 1.5
+            sc["JUNGLE"] += 0.5
+        if 11 in spells:
+            sc["JUNGLE"] += 3.0
+        for sp in (7, 21, 1):
+            if sp in spells:
+                sc["BOTTOM"] += 2.0
+        if 3 in spells:
+            sc["UTILITY"] += 2.0
+        for sp in (12, 14):
+            if sp in spells:
+                sc["TOP"] += 0.5
+                sc["MIDDLE"] += 0.5
+        return sc
+
+    async def record_result(self, player, game, platform):
+        pu = player["puuid"]
+        champ = "?"
+        me0 = next((x for x in game["participants"] if x.get("puuid") == pu), None)
+        if me0:
+            champ = champion_name(me0["championId"])
+        regional = PLATFORMS.get(platform, "americas")
+        for tent in range(4):
+            if tent:
+                await asyncio.sleep(25)
+            try:
+                ids = riot_get(f"https://{regional}.api.riotgames.com/lol/match/v5/"
+                               f"matches/by-puuid/{pu}/ids?count=1")
+                if not ids:
+                    continue
+                m = riot_get(f"https://{regional}.api.riotgames.com/lol/match/v5/matches/{ids[0]}")
+                if not m:
+                    continue
+                me = next((x for x in m["info"]["participants"] if x["puuid"] == pu), None)
+                if not me:
+                    continue
+                self.history.append({
+                    "match": ids[0], "riot": player["riot"], "champ": champ,
+                    "win": bool(me["win"]), "k": me["kills"], "d": me["deaths"],
+                    "a": me["assists"], "ended": time.time()})
+                self.save_history()
+                await self.update_panel(str(player.get("gid", "")), force=True)
+                print(f"resultado: {player['riot']} {'V' if me['win'] else 'D'}")
+                return
+            except Exception as e:
+                print("record:", e)
+
     def wr_text(self, entry):
         if not entry:
             return ""
@@ -300,6 +387,16 @@ class Client(discord.Client):
             color=ACCENT)
         filas = cfg.get("queues") or []
         f_txt = ", ".join(str(q) for q in filas) if filas else "todas"
+        agora = time.time()
+        hist = [x for x in self.history if agora - x.get("ended", 0) < 86400]
+        if hist:
+            lh = []
+            for h in hist[-8:][::-1]:
+                marca = "🟢" if h["win"] else "🔴"
+                hora = time.strftime("%H:%M", time.localtime(h["ended"]))
+                lh.append(f"{marca} `{hora}` **{h['riot']}** · {h['champ']} · "
+                          f"{h['k']}/{h['d']}/{h['a']}")
+            emb.add_field(name="Últimas 24 h", value="\n".join(lh), inline=False)
         emb.set_footer(text=f"{len(players)} jogador(es) · rankeado por elo de solo queue"
                             f" · filas: {f_txt} · /registrar · /remover")
         return emb
@@ -529,17 +626,26 @@ class Client(discord.Client):
             riot = p.get("riotId") or self.names.get(pu)
             if not riot:
                 riot = await asyncio.to_thread(account_name, pu, platform)
-                self.names[pu] = riot
-            else:
-                self.names[pu] = riot
+            self.names[pu] = riot
             entry = await asyncio.to_thread(self.rank_of, pu, platform)
-            role = await asyncio.to_thread(self.role_of, pu, platform)
-            if not role and 11 in (p.get("spell1Id"), p.get("spell2Id")):
-                role = "JUNGLE"
+            hist = await asyncio.to_thread(self.role_of, pu, platform)
+            spells = {p.get("spell1Id"), p.get("spell2Id")}
+            tags = render.champion_tags(p["championId"])
             out.append({"teamId": p["teamId"], "championId": p["championId"],
                         "player": riot, "champ": champion_name(p["championId"]),
-                        "role": role, "watched": pu in focus,
-                        "elo": render.rank_text(entry)})
+                        "role": hist, "watched": pu in focus,
+                        "elo": render.rank_text(entry),
+                        "_sc": self.role_scores(hist, tags, spells)})
+        roles5 = ("TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY")
+        for tid in (100, 200):
+            idx = [i for i, x in enumerate(out) if x["teamId"] == tid]
+            if len(idx) == 5:
+                best = max(itertools.permutations(roles5),
+                           key=lambda perm: sum(out[idx[k]]["_sc"][perm[k]] for k in range(5)))
+                for k, i in enumerate(idx):
+                    out[i]["role"] = best[k]
+        for x in out:
+            x.pop("_sc", None)
         return out
 
     async def check_all(self):
@@ -565,7 +671,10 @@ class Client(discord.Client):
                 self.games[puuid] = game
                 if game:
                     self.teams.pop(novo, None)
-                else:
+                elif antigo:
+                    pp = dict(p)
+                    pp["gid"] = gid
+                    asyncio.create_task(self.record_result(pp, antes, p.get("platform", "br1")))
                     self.teams.pop(antigo, None)
                 mudou = True
                 tocados.add(gid)

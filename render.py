@@ -41,8 +41,14 @@ def cdn():
             f"https://ddragon.leagueoflegends.com/cdn/{ver}/data/en_US/champion.json",
             timeout=30).json()["data"]
         _cdn = {"ver": ver,
-                "by_id": {int(v["key"]): (v["name"], k) for k, v in data.items()}}
+                "by_id": {int(v["key"]): (v["name"], k) for k, v in data.items()},
+                "tags": {int(v["key"]): list(v.get("tags", [])) for v in data.values()}}
     return _cdn
+
+
+def champion_tags(champion_id):
+    cdn()
+    return _cdn.get("tags", {}).get(champion_id, [])
 
 
 def champion_icon(champion_id):
