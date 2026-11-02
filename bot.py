@@ -342,7 +342,7 @@ class Client(discord.Client):
         gkey = game["gameId"]
         focus = [p["puuid"] for p in plist]
         team = await self.enrich(game, plist[0].get("platform", "br1"), focus)
-        b1, b2 = await asyncio.to_thread(styles.build_teams, team)
+        buf = await asyncio.to_thread(styles.build_card, team)
         link = spectate_link(game, plist[0].get("platform", "br1"))
         fila = QUEUES.get(game.get("gameQueueConfigId"), game.get("gameMode"))
         mins = game.get("gameLength", 0) // 60
@@ -363,12 +363,12 @@ class Client(discord.Client):
         emb = discord.Embed(timestamp=discord.utils.utcnow(), title=titulo,
                             description=desc, color=ACCENT)
         try:
-            files = [discord.File(b1, "azul.png"), discord.File(b2, "vermelho.png")]
+            att = [discord.File(buf, "partida.png")]
             if edit is not None:
-                await edit.edit(embed=emb, attachments=files)
+                await edit.edit(embed=emb, attachments=att)
                 msg = edit
             else:
-                msg = await ch.send(embed=emb, files=files)
+                msg = await ch.send(embed=emb, files=att)
             self.notices.setdefault(gid, {})[gkey] = {
                 "msg": msg, "players": set(focus)}
             return msg

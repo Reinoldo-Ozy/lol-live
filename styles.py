@@ -399,3 +399,47 @@ def build_teams(team):
         vals = [p.get("elo", "") for p in ps]
         elo[tid] = "média do time" if any(vals) else ""
     return build_team_card(team, 100), build_team_card(team, 200)
+
+
+def build_card(team, S=3):
+    W2 = 550 * S
+    pad = 8 * S
+    lab = 14 * S
+    row = 48 * S
+    icon = 32 * S
+    h = pad + lab + row * 5 + 6 * S + lab + row * 5 + pad
+    img = Image.new("RGB", (W2, h), BG)
+    d = ImageDraw.Draw(img)
+    fr = font(NOTO + "NotoSans-Bold.ttf", 8 * S)
+    fc = font(NOTO + "NotoSans-Bold.ttf", 18 * S)
+    fn = font(NOTO + "NotoSans-Regular.ttf", 13 * S)
+    fe = font(NOTO + "NotoSansMono-Regular.ttf", 12 * S)
+    ft = font(NOTO + "NotoSans-Bold.ttf", 10 * S)
+    nick_col = (175, 180, 189)
+    icon_x = pad + 26 * S
+    tx = icon_x + icon + 8 * S
+    y = pad
+    for tid in (100, 200):
+        col = BLUE if tid == 100 else RED
+        d.text((pad, y), "AZUL" if tid == 100 else "VERMELHO", font=ft, fill=col)
+        y += lab
+        for p in render.by_role(team, tid):
+            watch = p.get("watched")
+            if watch:
+                d.rectangle([0, y - 2 * S, W2 - 1, y + row - 4 * S], fill=(23, 27, 12))
+                d.rectangle([0, y - 2 * S, 3 * S, y + row - 4 * S], fill=ACC)
+            d.text((pad, y + 18 * S), (p.get("role") or "")[:3], font=fr,
+                   fill=ACC if watch else col)
+            _icon(img, p["championId"], icon_x, y + 4 * S, icon, ACC if watch else col)
+            d.text((tx, y + 1 * S), fit(d, p["champ"], fc, 250 * S), font=fc,
+                   fill=ACC if watch else INK)
+            d.text((W2 - pad, y + 5 * S), p["elo"], font=fe,
+                   fill=(200, 204, 210) if watch else (155, 160, 168), anchor="ra")
+            d.text((tx, y + 26 * S), fit(d, p["player"], fn, 250 * S), font=fn,
+                   fill=(228, 231, 236) if watch else nick_col)
+            y += row
+        y += 6 * S
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
