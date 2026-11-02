@@ -310,38 +310,41 @@ def style_6_final(team, S=3, fam="noto"):
                        else (TTF + "DejaVuSans.ttf", TTF + "DejaVuSans-Bold.ttf",
                              TTF + "DejaVuSansMono.ttf"))
     W2 = W * S
-    pad = 8 * S
-    row = 32 * S
-    h = (8 + 16 + 32 * 5 + 2 + 16 + 32 * 5 + 8) * S
+    pad = 6 * S
+    label = 14 * S
+    row = 35 * S
+    icon = 28 * S
+    h = pad + label + row * 5 + 4 * S + label + row * 5 + pad
     img = Image.new("RGB", (W2, h), BG)
     d = ImageDraw.Draw(img)
     fr = font(bold, 7 * S)
-    fc = font(bold, 12 * S)
-    fn = font(reg, 10 * S)
-    fe = font(mono, 9 * S)
+    fc = font(bold, 16 * S)
+    fn = font(reg, 12 * S)
+    fe = font(mono, 11 * S)
     ft = font(bold, 8 * S)
-    nick_col = (158, 163, 172)
+    nick_col = (170, 175, 184)
+    tx = 60 * S
     y = pad
     for tid in (100, 200):
         col = BLUE if tid == 100 else RED
         d.text((pad, y), "AZUL" if tid == 100 else "VERMELHO", font=ft, fill=col)
-        y += 16 * S
+        y += label
         for p in render.by_role(team, tid):
             watch = p.get("watched")
             if watch:
                 d.rectangle([0, y - 2 * S, W2 - 1, y + row - 4 * S], fill=(23, 27, 12))
                 d.rectangle([0, y - 2 * S, 3 * S, y + row - 4 * S], fill=ACC)
-            d.text((pad, y + 8 * S), (p.get("role") or "")[:3], font=fr,
+            d.text((pad, y + 11 * S), (p.get("role") or "")[:3], font=fr,
                    fill=ACC if watch else col)
-            _icon(img, p["championId"], 34 * S, y + 3 * S, 24 * S, ACC if watch else col)
-            d.text((62 * S, y + 4 * S), fit(d, p["champ"], fc, 120 * S), font=fc,
+            _icon(img, p["championId"], 26 * S, y + 3 * S, icon, ACC if watch else col)
+            d.text((tx, y + 1 * S), fit(d, p["champ"], fc, 150 * S), font=fc,
                    fill=ACC if watch else INK)
-            d.text((62 * S, y + 17 * S), fit(d, p["player"], fn, 200 * S), font=fn,
-                   fill=(210, 214, 220) if watch else nick_col)
-            d.text((W2 - pad, y + 6 * S), p["elo"], font=fe,
-                   fill=(170, 175, 184) if watch else (140, 144, 152), anchor="ra")
+            d.text((W2 - pad, y + 5 * S), p["elo"], font=fe,
+                   fill=(190, 194, 202) if watch else (150, 154, 162), anchor="ra")
+            d.text((tx, y + 19 * S), fit(d, p["player"], fn, 150 * S), font=fn,
+                   fill=(225, 228, 233) if watch else nick_col)
             y += row
-        y += 2 * S
+        y += 4 * S
     return img
 
 
