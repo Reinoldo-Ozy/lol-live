@@ -432,15 +432,15 @@ class Client(discord.Client):
     async def recover_panel(self, gid, ch):
         try:
             async for m in ch.history(limit=50):
-                if m.author.id != self.user.id or not m.embeds:
+                if m.author.id != self.user.id:
                     continue
-                e = m.embeds[0]
-                titulo = e.title or ""
+                e = m.embeds[0] if m.embeds else None
+                titulo = (e.title or "") if e else ""
                 if titulo in ("Jogadores vigiados", "Partidas ao vivo"):
                     if not self.panels.get(str(gid)):
                         self.panels[str(gid)] = m
                 elif (m.attachments or "entrou em partida" in titulo
-                      or "na mesma partida" in titulo or e.image):
+                      or "na mesma partida" in titulo):
                     try:
                         await m.delete()
                     except discord.HTTPException:
