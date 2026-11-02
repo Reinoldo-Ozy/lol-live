@@ -443,3 +443,30 @@ def build_card(team, S=3):
     img.save(buf, format="PNG")
     buf.seek(0)
     return buf
+
+
+def build_strip(team, S=3):
+    W2 = 550 * S
+    H = 74 * S
+    icon = 46 * S
+    gap = 5 * S
+    img = Image.new("RGB", (W2, H), BG)
+    d = ImageDraw.Draw(img)
+    x = 6 * S
+    for tid in (100, 200):
+        col = BLUE if tid == 100 else RED
+        start = x
+        for p in render.by_role(team, tid):
+            watch = p.get("watched")
+            _icon(img, p["championId"], x, 10 * S, icon, col)
+            if watch:
+                d.rectangle([x, 56 * S, x + icon, 59 * S], fill=ACC)
+            else:
+                d.rectangle([x, 56 * S, x + icon, 59 * S], fill=col)
+            x += icon + gap
+        d.rectangle([start, 4 * S, x - gap, 6 * S], fill=col)
+        x += 6 * S
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf

@@ -342,7 +342,7 @@ class Client(discord.Client):
         gkey = game["gameId"]
         focus = [p["puuid"] for p in plist]
         team = await self.enrich(game, plist[0].get("platform", "br1"), focus)
-        buf = await asyncio.to_thread(styles.build_card, team)
+        buf = await asyncio.to_thread(styles.build_strip, team)
         link = spectate_link(game, plist[0].get("platform", "br1"))
         fila = QUEUES.get(game.get("gameQueueConfigId"), game.get("gameMode"))
         mins = game.get("gameLength", 0) // 60
@@ -352,7 +352,8 @@ class Client(discord.Client):
                        if x.get("puuid") == p["puuid"]), None)
             champ = champion_name(me["championId"]) if me else "?"
             role = ROLES.get((me or {}).get("teamPosition", ""), "")
-            linhas.append(f"🔴 **{p['riot']}** · {champ}" + (f" · {role}" if role else ""))
+            linhas.append(f"🔴 **{champ}** · {p['riot']} · {role}" if role
+                          else f"🔴 **{champ}** · {p['riot']}")
         if len(plist) == 1:
             titulo = f"{plist[0]['riot']} entrou em partida"
         else:
@@ -362,8 +363,9 @@ class Client(discord.Client):
             desc += f"\n`{link}`"
         emb = discord.Embed(timestamp=discord.utils.utcnow(), title=titulo,
                             description=desc, color=ACCENT)
+        emb.set_image(url="attachment://faixa.png")
         try:
-            att = [discord.File(buf, "partida.png")]
+            att = [discord.File(buf, "faixa.png")]
             if edit is not None:
                 await edit.edit(embed=emb, attachments=att)
                 msg = edit
