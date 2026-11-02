@@ -316,44 +316,79 @@ class Client(discord.Client):
             except discord.HTTPException:
                 pass
 
-    async def send_notice(self, gid, p, game):
+    async def send_notice(self, gid, plist, game, edit=None):
         gid = str(gid)
         cfg = self.reg.get(gid)
         ch = self.get_channel(cfg.get("channel") or 0) if cfg else None
         if not ch:
-            return
+            return None
         gkey = game["gameId"]
-        team = await self.enrich(game, p.get("platform", "br1"), p["puuid"])
+        focus = [p["puuid"] for p in plist]
+        team = await self.enrich(game, plist[0].get("platform", "br1"), focus)
         buf = await asyncio.to_thread(styles.build_6, team)
-        link = spectate_link(game, p.get("platform", "br1"))
-        me = next((x for x in game["participants"] if x.get("puuid") == p["puuid"]), None)
-        champ = champion_name(me["championId"]) if me else "?"
-        role = ROLES.get((me or {}).get("teamPosition", ""), "")
-        emb = discord.Embed(
-            timestamp=discord.utils.utcnow(),
-            title=f"{p['riot']} entrou em partida",
-            description=(f"**{champ}**" + (f" · {role}" if role else "")
-                         + f" · {QUEUES.get(game.get('gameQueueConfigId'), game.get('gameMode'))}"
-                         + f" · {game.get('gameLength', 0) // 60} min")
-                        + (f"\n`{link}`" if link else ""),
-            color=ACCENT)
+        link = spectate_link(game, plist[0].get("platform", "br1"))
+        fila = QUEUES.get(game.get("gameQueueConfigId"), game.get("gameMode"))
+        mins = game.get("gameLength", 0) // 60
+        linhas = []
+        for p in plist:
+            me = next((x for x in game["participants"]
+                       if x.get("puuid") == p["puuid"]), None)
+            champ = champion_name(me["championId"]) if me else "?"
+            role = ROLES.get((me or {}).get("teamPosition", ""), "")
+            linhas.append(f"🔴 **{p['riot']}** · {champ}" + (f" · {role}" if role else ""))
+        if len(plist) == 1:
+            titulo = f"{plist[0]['riot']} entrou em partida"
+        else:
+            titulo = f"{len(plist)} vigiados na mesma partida"
+        desc = "\n".join(linhas) + f"\n{fila} · {mins} min"
+        if link:
+            desc += f"\n`{link}`"
+        emb = discord.Embed(timestamp=discord.utils.utcnow(), title=titulo,
+                            description=desc, color=ACCENT)
         emb.set_image(url="attachment://partida.png")
         try:
-            msg = await ch.send(embed=emb, file=discord.File(buf, "partida.png"))
-            self.notices.setdefault(gid, {})[gkey] = msg.id
+            if edit is not None:
+                await edit.edit(embed=emb, attachments=[discord.File(buf, "partida.png")])
+                msg = edit
+            else:
+                msg = await ch.send(embed=emb, file=discord.File(buf, "partida.png"))
+            self.notices.setdefault(gid, {})[gkey] = {
+                "msg": msg, "players": set(focus)}
+            return msg
         except discord.HTTPException as e:
             print("erro ao enviar aviso:", e)
+            return None
 
     async def drop_notice(self, gid, game_id):
         gid = str(gid)
         cfg = self.reg.get(gid)
         ch = self.get_channel(cfg.get("channel") or 0) if cfg else None
-        mid = self.notices.get(gid, {}).pop(game_id, None)
-        if ch and mid:
+        entry = self.notices.get(gid, {}).pop(game_id, None)
+        if ch and entry:
             try:
-                await ch.get_partial_message(mid).delete()
+                await entry["msg"].delete()
             except discord.HTTPException:
                 pass
+
+    async def sync_notices(self, gid):
+        gid = str(gid)
+        cfg = self.reg.get(gid, {})
+        live = {}
+        for p in cfg.get("players", {}).values():
+            g = self.games.get(p["puuid"])
+            if g:
+                live.setdefault(g["gameId"], []).append(p)
+        cur = self.notices.setdefault(gid, {})
+        for gkey in list(cur):
+            if gkey not in live:
+                await self.drop_notice(gid, gkey)
+        for gkey, plist in live.items():
+            entry = cur.get(gkey)
+            pset = {p["puuid"] for p in plist}
+            if entry and entry.get("players") == pset:
+                continue
+            await self.send_notice(gid, plist, self.games[plist[0]["puuid"]],
+                                   edit=(entry or {}).get("msg"))
 
     async def move_panel(self, gid):
         gid = str(gid)
@@ -436,6 +471,7 @@ class Client(discord.Client):
         return solo
 
     async def enrich(self, game, platform, focus=None):
+        focus = set(focus or ())
         out = []
         for p in game["participants"]:
             pu = p["puuid"]
@@ -447,7 +483,7 @@ class Client(discord.Client):
             out.append({"teamId": p["teamId"], "championId": p["championId"],
                         "player": riot, "champ": champion_name(p["championId"]),
                         "role": p.get("teamPosition") or "",
-                        "watched": pu == focus,
+                        "watched": pu in focus,
                         "elo": render.rank_text(entry)})
         return out
 
@@ -472,16 +508,15 @@ class Client(discord.Client):
                 if novo == antigo:
                     continue
                 self.games[puuid] = game
-                if novo:
-                    await self.send_notice(gid, p, game)
-                elif antigo:
-                    await self.drop_notice(gid, antigo)
-                for old in [k for k in self.images if k == antigo]:
-                    self.images.pop(old, None)
-                    self.teams.pop(old, None)
+                if game:
+                    self.teams.pop(novo, None)
+                else:
+                    self.teams.pop(antigo, None)
                 mudou = True
                 tocados.add(gid)
                 await asyncio.sleep(1)
+            if gid in tocados:
+                await self.sync_notices(gid)
         if mudou:
             await self.set_presence()
             for gid in tocados:
