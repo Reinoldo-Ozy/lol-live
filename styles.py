@@ -353,3 +353,49 @@ def build_6(team, S=3):
     style_6_final(team, S=S, fam="noto").save(buf, format="PNG")
     buf.seek(0)
     return buf
+
+
+def build_team_card(team, tid, avg=None):
+    S = 3
+    W2 = 550 * S
+    pad = 10 * S
+    row = 58 * S
+    h = 40 * S + row * 5 + 10 * S
+    img = Image.new("RGB", (W2, h), BG)
+    d = ImageDraw.Draw(img)
+    col = BLUE if tid == 100 else RED
+    f_t = font(NOTO + "NotoSans-Bold.ttf", 12 * S)
+    f_c = font(NOTO + "NotoSans-Bold.ttf", 18 * S)
+    f_n = font(NOTO + "NotoSans-Regular.ttf", 13 * S)
+    f_e = font(NOTO + "NotoSansMono-Regular.ttf", 12 * S)
+    d.rectangle([0, 0, 4 * S, h], fill=col)
+    d.text((pad, 10 * S), "AZUL" if tid == 100 else "VERMELHO", font=f_t, fill=col)
+    if avg:
+        d.text((W2 - pad, 10 * S), avg, font=f_e, fill=col, anchor="ra")
+    y = 40 * S
+    for p in render.by_role(team, tid):
+        watch = p.get("watched")
+        if watch:
+            d.rectangle([0, y, W2, y + row - 6 * S], fill=(23, 27, 12))
+            d.rectangle([0, y, 4 * S, y + row - 6 * S], fill=ACC)
+        _icon(img, p["championId"], pad, y + 6 * S, 40 * S, ACC if watch else col)
+        d.text((pad + 48 * S, y + 4 * S), fit(d, p["champ"], f_c, 300 * S), font=f_c,
+               fill=ACC if watch else INK)
+        d.text((pad + 48 * S, y + 28 * S), fit(d, p["player"], f_n, 330 * S), font=f_n,
+               fill=(225, 228, 233) if watch else (170, 175, 184))
+        d.text((W2 - pad, y + 10 * S), p["elo"], font=f_e,
+               fill=(200, 204, 210) if watch else (155, 160, 168), anchor="ra")
+        y += row
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+
+def build_teams(team):
+    elo = {}
+    for tid in (100, 200):
+        ps = render.by_role(team, tid)
+        vals = [p.get("elo", "") for p in ps]
+        elo[tid] = "média do time" if any(vals) else ""
+    return build_team_card(team, 100), build_team_card(team, 200)
