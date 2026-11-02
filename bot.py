@@ -433,10 +433,11 @@ class Client(discord.Client):
                 if m.author.id != self.user.id or not m.embeds:
                     continue
                 e = m.embeds[0]
-                if (e.title or "") in ("Jogadores vigiados", "Partidas ao vivo"):
+                titulo = e.title or ""
+                if titulo in ("Jogadores vigiados", "Partidas ao vivo"):
                     if not self.panels.get(str(gid)):
                         self.panels[str(gid)] = m
-                elif e.image:
+                elif "entrou em partida" in titulo or "na mesma partida" in titulo or e.image:
                     try:
                         await m.delete()
                     except discord.HTTPException:
