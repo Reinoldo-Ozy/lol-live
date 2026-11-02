@@ -42,6 +42,7 @@ Comandos no Discord:
 | `/canal #avisos` | define o canal (precisa de Gerenciar Servidor) |
 | `/registrar Nick#TAG [plataforma]` | adiciona jogador (padrão `br1`) |
 | `/remover Nick#TAG` | remove |
+| `/filas` | quais filas geram aviso — `todas` (padrão) ou ids: `420,440` |
 | `/lista` | mostra quem está vigiado e quem está em partida |
 | `/verificar` | força uma checagem agora |
 

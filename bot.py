@@ -252,6 +252,10 @@ class Client(discord.Client):
     TIER_ORDER = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM",
                   "EMERALD", "DIAMOND", "MASTER", "GRANDMASTER", "CHALLENGER"]
 
+    def queue_ok(self, gid, game):
+        q = self.reg.get(str(gid), {}).get("queues") or []
+        return not q or game.get("gameQueueConfigId") in q
+
     def rank_score(self, entry):
         if not entry:
             return -1
@@ -283,8 +287,10 @@ class Client(discord.Client):
             title="Jogadores vigiados",
             description="\n".join(linhas) or "Ninguém cadastrado.\nUse `/registrar Nick#TAG`.",
             color=ACCENT)
+        filas = cfg.get("queues") or []
+        f_txt = ", ".join(str(q) for q in filas) if filas else "todas"
         emb.set_footer(text=f"{len(players)} jogador(es) · rankeado por elo de solo queue"
-                            f" · /registrar · /remover")
+                            f" · filas: {f_txt} · /registrar · /remover")
         return emb
 
     async def update_panel(self, gid, force=False):
@@ -376,7 +382,7 @@ class Client(discord.Client):
         live = {}
         for p in cfg.get("players", {}).values():
             g = self.games.get(p["puuid"])
-            if g:
+            if g and self.queue_ok(gid, g):
                 live.setdefault(g["gameId"], []).append(p)
         cur = self.notices.setdefault(gid, {})
         for gkey in list(cur):
@@ -637,6 +643,28 @@ async def remover(inter: discord.Interaction, riot_id: str):
             await inter.response.send_message(f"removido: {p['riot']}", ephemeral=True)
             return
     await inter.response.send_message("não achei esse nick na lista", ephemeral=True)
+
+
+@bot.tree.command(name="filas", description="Quais filas geram aviso (padrao: todas)")
+@app_commands.describe(filas="todas ou ids separados por virgula: 420 solo, 440 flex, 450 ARAM, 400 normal")
+async def filas(inter: discord.Interaction, filas: str = "todas"):
+    gid = str(inter.guild_id)
+    cfg = bot.reg.setdefault(gid, {"channel": 0, "players": {}})
+    txt = (filas or "").strip().lower()
+    if txt in ("", "todas", "all"):
+        cfg["queues"] = []
+    else:
+        try:
+            cfg["queues"] = [int(x) for x in txt.replace(" ", "").split(",") if x]
+        except ValueError:
+            await inter.response.send_message("use ids separados por virgula ou 'todas'",
+                                              ephemeral=True)
+            return
+    save(bot.reg)
+    await bot.sync_notices(gid)
+    await bot.update_panel(gid, force=True)
+    atual = ", ".join(str(q) for q in cfg["queues"]) if cfg["queues"] else "todas"
+    await inter.response.send_message(f"filas com aviso: {atual}", ephemeral=True)
 
 
 @bot.tree.command(name="lista", description="Mostra os jogadores vigiados")
