@@ -355,21 +355,20 @@ class Client(discord.Client):
             linhas.append(f"🔴 **{champ}** · {p['riot']} · {role}" if role
                           else f"🔴 **{champ}** · {p['riot']}")
         if len(plist) == 1:
-            titulo = f"{plist[0]['riot']} entrou em partida"
+            titulo = f"**{plist[0]['riot']}** entrou em partida"
         else:
-            titulo = f"{len(plist)} vigiados na mesma partida"
-        desc = "\n".join(linhas) + f"\n{fila} · {mins} min"
+            titulo = f"**{len(plist)} vigiados na mesma partida**"
+        corpo = "\n".join(linhas) + f"\n{fila} · {mins} min"
         if link:
-            desc += f"\n`{link}`"
-        emb = discord.Embed(timestamp=discord.utils.utcnow(), title=titulo,
-                            description=desc, color=ACCENT)
+            corpo += f"\n`{link}`"
+        texto = titulo + "\n" + corpo
         try:
             att = [discord.File(buf, "faixa.png")]
             if edit is not None:
-                await edit.edit(embed=emb, attachments=att)
+                await edit.edit(content=texto, embed=None, attachments=att)
                 msg = edit
             else:
-                msg = await ch.send(embed=emb, files=att)
+                msg = await ch.send(content=texto, files=att)
             self.notices.setdefault(gid, {})[gkey] = {
                 "msg": msg, "players": set(focus)}
             return msg
@@ -437,7 +436,8 @@ class Client(discord.Client):
                 if titulo in ("Jogadores vigiados", "Partidas ao vivo"):
                     if not self.panels.get(str(gid)):
                         self.panels[str(gid)] = m
-                elif "entrou em partida" in titulo or "na mesma partida" in titulo or e.image:
+                elif (m.attachments or "entrou em partida" in titulo
+                      or "na mesma partida" in titulo or e.image):
                     try:
                         await m.delete()
                     except discord.HTTPException:
