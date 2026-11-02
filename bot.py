@@ -363,7 +363,6 @@ class Client(discord.Client):
             desc += f"\n`{link}`"
         emb = discord.Embed(timestamp=discord.utils.utcnow(), title=titulo,
                             description=desc, color=ACCENT)
-        emb.set_image(url="attachment://faixa.png")
         try:
             att = [discord.File(buf, "faixa.png")]
             if edit is not None:
