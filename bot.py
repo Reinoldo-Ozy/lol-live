@@ -166,7 +166,34 @@ class Client(discord.Client):
             await self.update_panel(guild.id, force=True)
         print(f"entrou em {guild.name} · canal {channel}")
 
+    async def refresh_players(self):
+        mudou = False
+        for gid, cfg in self.reg.items():
+            players = cfg.get("players", {})
+            for pu, p in list(players.items()):
+                try:
+                    name, tag = p["riot"].rsplit("#", 1)
+                    acc = await asyncio.to_thread(account_by_id, name, tag,
+                                                  p.get("platform", "br1"))
+                except Exception as e:
+                    print("refresh:", e)
+                    continue
+                if not acc or acc["puuid"] == pu:
+                    continue
+                novo = acc["puuid"]
+                players.pop(pu, None)
+                p = dict(p)
+                p["puuid"] = novo
+                players[novo] = p
+                self.ranks.pop(pu, None)
+                self.games.pop(pu, None)
+                mudou = True
+                print(f"puuid atualizado: {p['riot']}")
+        if mudou:
+            save(self.reg)
+
     async def on_ready(self):
+        await self.refresh_players()
         for guild in self.guilds:
             ch = self.get_channel(self.reg.get(str(guild.id), {}).get("channel") or 0)
             if ch:
