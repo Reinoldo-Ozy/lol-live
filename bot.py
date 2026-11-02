@@ -347,13 +347,16 @@ class Client(discord.Client):
         fila = QUEUES.get(game.get("gameQueueConfigId"), game.get("gameMode"))
         mins = game.get("gameLength", 0) // 60
         linhas = []
-        for p in plist:
-            me = next((x for x in game["participants"]
-                       if x.get("puuid") == p["puuid"]), None)
-            champ = champion_name(me["championId"]) if me else "?"
-            role = ROLES.get((me or {}).get("teamPosition", ""), "")
-            linhas.append(f"🔴 **{champ}** · {p['riot']} · {role}" if role
-                          else f"🔴 **{champ}** · {p['riot']}")
+        for tid in (100, 200):
+            for t in render.by_role(team, tid):
+                marca = "🔴" if t.get("watched") else "⚪"
+                role = ROLES.get(t.get("role", ""), "")
+                linha = f"{marca} **{t['champ']}** · {t['player']}"
+                if role:
+                    linha += f" · {role}"
+                linhas.append(linha)
+            if tid == 100:
+                linhas.append("")
         if len(plist) == 1:
             titulo = f"**{plist[0]['riot']}** entrou em partida"
         else:
