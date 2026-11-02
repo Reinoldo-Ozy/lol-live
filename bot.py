@@ -362,7 +362,6 @@ class Client(discord.Client):
             desc += f"\n`{link}`"
         emb = discord.Embed(timestamp=discord.utils.utcnow(), title=titulo,
                             description=desc, color=ACCENT)
-        emb.set_image(url="attachment://partida.png")
         try:
             if edit is not None:
                 await edit.edit(embed=emb, attachments=[discord.File(buf, "partida.png")])
