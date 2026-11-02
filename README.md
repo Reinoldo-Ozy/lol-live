@@ -81,7 +81,8 @@ journalctl --user -u lol-live -f
 - Partida custom/treino e alguns modos não aparecem no spectator.
 - O estado fica em memória: reiniciar o bot no meio de uma partida gera um
   aviso repetido.
-- A chave da Riot de desenvolvimento expira em 24 h; troque o arquivo quando
-  o bot começar a logar `chave da Riot inválida ou expirada`.
+- A chave da Riot aqui é uma **Personal API Key** (não expira). Se um dia voltar
+  a usar a Development key, ela morre em 24 h e o bot passa a logar
+  `chave da Riot inválida ou expirada` até você trocar o arquivo.
 - `spectator-v5` custa 1 request por jogador a cada 45 s. Com 20 jogadores são
   ~27 req/min, dentro do limite de 100/2min.
