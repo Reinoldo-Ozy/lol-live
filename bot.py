@@ -391,7 +391,7 @@ class Client(discord.Client):
         hist = [x for x in self.history if agora - x.get("ended", 0) < 86400]
         if hist:
             lh = []
-            for h in hist[-8:][::-1]:
+            for h in sorted(hist, key=lambda x: x["ended"], reverse=True)[:8]:
                 marca = "🟢" if h["win"] else "🔴"
                 hora = time.strftime("%H:%M", time.localtime(h["ended"]))
                 lh.append(f"{marca} `{hora}` **{h['riot']}** · {h['champ']} · "
