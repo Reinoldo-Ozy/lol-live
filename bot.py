@@ -451,6 +451,10 @@ class Client(discord.Client):
                 linha = f"{marca} **{t['champ']}** · {t['player']}"
                 if role:
                     linha += f" · {role}"
+                if t.get("watched") and t.get("last", {}).get("k") is not None:
+                    lt = t["last"]
+                    linha += (f"\n   última: {lt['k']}/{lt['d']}/{lt['a']}"
+                              f" · {lt['csmin']} CS/min")
                 linhas.append(linha)
             if tid == 100:
                 linhas.append("")
@@ -610,7 +614,7 @@ class Client(discord.Client):
         if hit and time.monotonic() - hit[1] < 6 * 3600:
             return hit[0]
         regional = PLATFORMS.get(platform, "americas")
-        role = ""
+        dados = {"role": "", "k": 0, "d": 0, "a": 0, "csmin": 0.0}
         votos = {}
         try:
             ids = riot_get(f"https://{regional}.api.riotgames.com/lol/match/v5/"
@@ -620,19 +624,26 @@ class Client(discord.Client):
                              f"matches/{mid}")
                 if not m:
                     continue
-                me = next((x for x in m["info"]["participants"]
-                           if x["puuid"] == puuid), None)
-                pos = (me or {}).get("teamPosition") or ""
+                info = m["info"]
+                me = next((x for x in info["participants"] if x["puuid"] == puuid), None)
+                if not me:
+                    continue
+                if not dados["k"] and not dados["d"]:
+                    mins = max(1, info["gameDuration"] / 60)
+                    cs = me["totalMinionsKilled"] + me.get("neutralMinionsKilled", 0)
+                    dados.update({"k": me["kills"], "d": me["deaths"], "a": me["assists"],
+                                  "csmin": round(cs / mins, 1)})
+                pos = me.get("teamPosition") or ""
                 if pos:
                     votos[pos] = votos.get(pos, 0) + 1
                 if sum(votos.values()) >= 3:
                     break
             if votos:
-                role = max(votos, key=votos.get)
+                dados["role"] = max(votos, key=votos.get)
         except Exception as e:
             print("role:", e)
-        self.roles[puuid] = (role, time.monotonic())
-        return role
+        self.roles[puuid] = (dados, time.monotonic())
+        return dados
 
     async def enrich(self, game, platform, focus=None):
         focus = set(focus or ())
@@ -644,13 +655,14 @@ class Client(discord.Client):
                 riot = await asyncio.to_thread(account_name, pu, platform)
             self.names[pu] = riot
             entry = await asyncio.to_thread(self.rank_of, pu, platform)
-            hist = await asyncio.to_thread(self.role_of, pu, platform)
+            info = await asyncio.to_thread(self.role_of, pu, platform)
+            hist = info.get("role", "")
             spells = {p.get("spell1Id"), p.get("spell2Id")}
             tags = render.champion_tags(p["championId"])
             out.append({"teamId": p["teamId"], "championId": p["championId"],
                         "player": riot, "champ": champion_name(p["championId"]),
                         "role": hist, "watched": pu in focus,
-                        "elo": render.rank_text(entry),
+                        "last": info, "elo": render.rank_text(entry),
                         "_sc": self.role_scores(hist, tags, spells)})
         roles5 = ("TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY")
         for tid in (100, 200):
