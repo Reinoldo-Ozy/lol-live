@@ -571,10 +571,26 @@ class Client(discord.Client):
 
     async def set_presence(self):
         total = sum(len(c.get("players", {})) for c in self.reg.values())
-        vivos = sum(1 for g in self.games.values() if g)
-        nome = (f"{vivos} em partida" if vivos else f"{total} jogador(es)")[:128]
+        vivos = []
+        for cfg in self.reg.values():
+            for p in cfg.get("players", {}).values():
+                g = self.games.get(p["puuid"])
+                if g:
+                    vivos.append((p, g))
+        if len(vivos) == 1:
+            p, g = vivos[0]
+            me = next((x for x in g["participants"]
+                       if x.get("puuid") == p["puuid"]), None)
+            champ = champion_name(me["championId"]) if me else ""
+            mins = g.get("gameLength", 0) // 60
+            nick = p["riot"].split("#")[0]
+            nome = f"{nick} · {champ} · {mins} min"
+        elif len(vivos) > 1:
+            nome = f"{len(vivos)} em partida"
+        else:
+            nome = f"{total} jogador(es)"
         await self.change_presence(
-            activity=discord.Activity(type=discord.ActivityType.watching, name=nome))
+            activity=discord.Activity(type=discord.ActivityType.watching, name=nome[:128]))
 
     def rank_of(self, puuid, platform):
         hit = self.ranks.get(puuid)
@@ -689,6 +705,7 @@ class Client(discord.Client):
     @tasks.loop(seconds=45)
     async def poll(self):
         await self.check_all()
+        await self.set_presence()
 
     def build_embed(self, player, game):
         platform = player.get("platform", "br1")
